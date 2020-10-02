@@ -1,148 +1,253 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:notes_keeper/models/note.dart';
 import 'package:notes_keeper/utils/database_helper.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
-import 'package:notes_keeper/screens/note_detail.dart';
 
-class NoteList extends StatefulWidget {
+class NoteDetail extends StatefulWidget {
+  final String appBarTitle;
+  final Note note;
+
+  NoteDetail(this.note, this.appBarTitle);
+
   @override
   State<StatefulWidget> createState() {
-    return NoteListState();
+    return NoteDetailState(this.note, this.appBarTitle);
   }
 }
 
-class NoteListState extends State<NoteList> {
-  DatabaseHelper databaseHelper = DatabaseHelper();
-  List<Note> noteList;
-  int count = 0;
+class NoteDetailState extends State<NoteDetail> {
+  static var _priorities = ['High', 'Low'];
+
+  DatabaseHelper helper = DatabaseHelper();
+
+  String appBarTitle;
+  Note note;
+
+  TextEditingController titleController = TextEditingController();
+  TextEditingController descriptionController = TextEditingController();
+
+  NoteDetailState(this.note, this.appBarTitle);
 
   @override
   Widget build(BuildContext context) {
-    if (noteList == null) {
-      noteList = List<Note>();
-      updateListView();
-    }
+    TextStyle textStyle = Theme.of(context).textTheme.title;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Notes'),
-      ),
-      body: getNoteListView(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          debugPrint('FAB clicked');
-          navigateToDetail(Note('', '', 2), 'Add Note');
+    titleController.text = note.title;
+    descriptionController.text = note.description;
+
+    return WillPopScope(
+        onWillPop: () {
+          // Write some code to control things, when user press Back navigation button in device navigationBar
+          moveToLastScreen();
         },
-        tooltip: 'Add Note',
-        child: Icon(Icons.add),
-      ),
-    );
-  }
-
-  ListView getNoteListView() {
-    TextStyle titleStyle = Theme.of(context).textTheme.subhead;
-
-    return ListView.builder(
-      itemCount: count,
-      itemBuilder: (BuildContext context, int position) {
-        return Card(
-          color: Colors.white,
-          elevation: 2.0,
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor:
-                  getPriorityColor(this.noteList[position].priority),
-              child: getPriorityIcon(this.noteList[position].priority),
-            ),
-            title: Text(
-              this.noteList[position].title,
-              style: titleStyle,
-            ),
-            subtitle: Text(this.noteList[position].date),
-            trailing: GestureDetector(
-              child: Icon(
-                Icons.delete,
-                color: Colors.grey,
-              ),
-              onTap: () {
-                _delete(context, noteList[position]);
-              },
-            ),
-            onTap: () {
-              debugPrint("ListTile Tapped");
-              navigateToDetail(this.noteList[position], 'Edit Note');
-            },
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(appBarTitle),
+            leading: IconButton(
+                icon: Icon(Icons.arrow_back),
+                onPressed: () {
+                  // Write some code to control things, when user press back button in AppBar
+                  moveToLastScreen();
+                }),
           ),
-        );
-      },
-    );
+          body: Padding(
+            padding: EdgeInsets.only(top: 15.0, left: 10.0, right: 10.0),
+            child: ListView(
+              children: <Widget>[
+                // First element
+                ListTile(
+                  title: DropdownButton(
+                      items: _priorities.map((String dropDownStringItem) {
+                        return DropdownMenuItem<String>(
+                          value: dropDownStringItem,
+                          child: Text(dropDownStringItem),
+                        );
+                      }).toList(),
+                      style: textStyle,
+                      value: getPriorityAsString(note.priority),
+                      onChanged: (valueSelectedByUser) {
+                        setState(() {
+                          debugPrint('User selected $valueSelectedByUser');
+                          updatePriorityAsInt(valueSelectedByUser);
+                        });
+                      }),
+                ),
+
+                // Second Element
+                Padding(
+                  padding: EdgeInsets.only(top: 15.0, bottom: 15.0),
+                  child: TextField(
+                    controller: titleController,
+                    style: textStyle,
+                    onChanged: (value) {
+                      debugPrint('Something changed in Title Text Field');
+                      updateTitle();
+                    },
+                    decoration: InputDecoration(
+                        labelText: 'Title',
+                        labelStyle: textStyle,
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(5.0))),
+                  ),
+                ),
+
+                // Third Element
+                Padding(
+                  padding: EdgeInsets.only(top: 15.0, bottom: 15.0),
+                  child: TextField(
+                    controller: descriptionController,
+                    style: textStyle,
+                    onChanged: (value) {
+                      debugPrint('Something changed in Description Text Field');
+                      updateDescription();
+                    },
+                    decoration: InputDecoration(
+                        labelText: 'Description',
+                        labelStyle: textStyle,
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(5.0))),
+                  ),
+                ),
+
+                // Fourth Element
+                Padding(
+                  padding: EdgeInsets.only(top: 15.0, bottom: 15.0),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: RaisedButton(
+                          color: Theme.of(context).primaryColorDark,
+                          textColor: Theme.of(context).primaryColorLight,
+                          child: Text(
+                            'Save',
+                            textScaleFactor: 1.5,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              debugPrint("Save button clicked");
+                              _save();
+                            });
+                          },
+                        ),
+                      ),
+                      Container(
+                        width: 5.0,
+                      ),
+                      Expanded(
+                        child: RaisedButton(
+                          color: Theme.of(context).primaryColorDark,
+                          textColor: Theme.of(context).primaryColorLight,
+                          child: Text(
+                            'Delete',
+                            textScaleFactor: 1.5,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              debugPrint("Delete button clicked");
+                              _delete();
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ));
   }
 
-  // Returns the priority color
-  Color getPriorityColor(int priority) {
-    switch (priority) {
-      case 1:
-        return Colors.red;
-        break;
-      case 2:
-        return Colors.yellow;
-        break;
+  void moveToLastScreen() {
+    Navigator.pop(context, true);
+  }
 
-      default:
-        return Colors.yellow;
+  // Convert the String priority in the form of integer before saving it to Database
+  void updatePriorityAsInt(String value) {
+    switch (value) {
+      case 'High':
+        note.priority = 1;
+        break;
+      case 'Low':
+        note.priority = 2;
+        break;
     }
   }
 
-  // Returns the priority icon
-  Icon getPriorityIcon(int priority) {
-    switch (priority) {
+  // Convert int priority to String priority and display it to user in DropDown
+  String getPriorityAsString(int value) {
+    String priority;
+    switch (value) {
       case 1:
-        return Icon(Icons.play_arrow);
+        priority = _priorities[0]; // 'High'
         break;
       case 2:
-        return Icon(Icons.keyboard_arrow_right);
+        priority = _priorities[1]; // 'Low'
         break;
-
-      default:
-        return Icon(Icons.keyboard_arrow_right);
     }
+    return priority;
   }
 
-  void _delete(BuildContext context, Note note) async {
-    int result = await databaseHelper.deleteNote(note.id);
+  // Update the title of Note object
+  void updateTitle() {
+    note.title = titleController.text;
+  }
+
+  // Update the description of Note object
+  void updateDescription() {
+    note.description = descriptionController.text;
+  }
+
+  // Save data to database
+  void _save() async {
+    moveToLastScreen();
+
+    note.date = DateFormat.yMMMd().format(DateTime.now());
+    int result;
+    if (note.id != null) {
+      // Case 1: Update operation
+      result = await helper.updateNote(note);
+    } else {
+      // Case 2: Insert Operation
+      result = await helper.insertNote(note);
+    }
+
     if (result != 0) {
-      _showSnackBar(context, 'Note Deleted Successfully');
-      updateListView();
+      // Success
+      _showAlertDialog('Status', 'Note Saved Successfully');
+    } else {
+      // Failure
+      _showAlertDialog('Status', 'Problem Saving Note');
     }
   }
 
-  void _showSnackBar(BuildContext context, String message) {
-    final snackBar = SnackBar(content: Text(message));
-    Scaffold.of(context).showSnackBar(snackBar);
-  }
+  void _delete() async {
+    moveToLastScreen();
 
-  void navigateToDetail(Note note, String title) async {
-    bool result =
-        await Navigator.push(context, MaterialPageRoute(builder: (context) {
-      return NoteDetail(note, title);
-    }));
+    // Case 1: If user is trying to delete the NEW NOTE i.e. he has come to
+    // the detail page by pressing the FAB of NoteList page.
+    if (note.id == null) {
+      _showAlertDialog('Status', 'No Note was deleted');
+      return;
+    }
 
-    if (result == true) {
-      updateListView();
+    // Case 2: User is trying to delete the old note that already has a valid ID.
+    int result = await helper.deleteNote(note.id);
+    if (result != 0) {
+      _showAlertDialog('Status', 'Note Deleted Successfully');
+    } else {
+      _showAlertDialog('Status', 'Error Occured while Deleting Note');
     }
   }
 
-  void updateListView() {
-    final Future<Database> dbFuture = databaseHelper.initializeDatabase();
-    dbFuture.then((database) {
-      Future<List<Note>> noteListFuture = databaseHelper.getNoteList();
-      noteListFuture.then((noteList) {
-        setState(() {
-          this.noteList = noteList;
-          this.count = noteList.length;
-        });
-      });
-    });
+  void _showAlertDialog(String title, String message) {
+    AlertDialog alertDialog = AlertDialog(
+      title: Text(title),
+      content: Text(message),
+    );
+    showDialog(context: context, builder: (_) => alertDialog);
   }
 }
